@@ -1,0 +1,359 @@
+<Window x:Class="NetBypass.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="NetBypass"
+        Height="720" Width="1060"
+        MinHeight="620" MinWidth="880"
+        Background="#101117" Foreground="#F5F5F7"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibility"/>
+
+        <Style x:Key="NavigationButton" TargetType="Button">
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="16,13"/>
+            <Setter Property="Margin" Value="0,4,0,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#9DA1B1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="NavigationBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="9"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavigationBorder"
+                                        Property="Background" Value="#20232D"/>
+                                <Setter Property="Foreground" Value="#F5F5F7"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PowerButton" TargetType="Button">
+            <Setter Property="Width" Value="224"/>
+            <Setter Property="Height" Value="224"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Background" Value="#181A22"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse x:Name="OuterGlow"
+                                     Fill="{Binding StateAccent}"
+                                     Opacity="0.10"/>
+                            <Ellipse x:Name="Ring"
+                                     Margin="10"
+                                     Fill="#181A22"
+                                     Stroke="{Binding StateAccent}"
+                                     StrokeThickness="4"/>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="OuterGlow" Property="Opacity" Value="0.22"/>
+                                <Setter TargetName="Ring" Property="StrokeThickness" Value="5"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Ring" Property="Opacity" Value="0.72"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="OuterGlow" Property="Opacity" Value="0.04"/>
+                                <Setter TargetName="Ring" Property="Opacity" Value="0.42"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="218"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Background="#14161D"
+                BorderBrush="#232630"
+                BorderThickness="0,0,1,0">
+            <Grid Margin="22,26">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="34" Height="34"
+                            CornerRadius="10"
+                            Background="{StaticResource AccentBrush}">
+                        <TextBlock Text="N"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontSize="18"
+                                   FontWeight="Bold"/>
+                    </Border>
+                    <TextBlock Text="NetBypass"
+                               Margin="11,0,0,0"
+                               VerticalAlignment="Center"
+                               FontSize="20"
+                               FontWeight="Bold"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1" Margin="0,34,0,0">
+                    <Button Command="{Binding ShowHomeCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⌂" FontSize="19" Width="28"/>
+                            <TextBlock Text="Главная" FontSize="14"/>
+                        </StackPanel>
+                        <Button.Style>
+                            <Style TargetType="Button"
+                                   BasedOn="{StaticResource NavigationButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsHomePage}" Value="True">
+                                        <Setter Property="Background" Value="#29253D"/>
+                                        <Setter Property="Foreground" Value="#C8BCFF"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+
+                    <Button Command="{Binding ShowServicesCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button"
+                                   BasedOn="{StaticResource NavigationButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsServicesPage}" Value="True">
+                                        <Setter Property="Background" Value="#29253D"/>
+                                        <Setter Property="Foreground" Value="#C8BCFF"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="☷" FontSize="18" Width="28"/>
+                            <TextBlock Text="Сервисы" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Grid.Row="3">
+                    <TextBlock Text="Изменения сохраняются"
+                               Foreground="#777C8D"
+                               FontSize="12"/>
+                    <TextBlock Text="после закрытия программы"
+                               Foreground="#777C8D"
+                               FontSize="12"
+                               Margin="0,3,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1">
+            <Grid Visibility="{Binding IsHomePage, Converter={StaticResource BooleanToVisibility}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Margin="42,32,42,0">
+                    <TextBlock Text="Главная"
+                               FontSize="28"
+                               FontWeight="Bold"/>
+                    <TextBlock Text="Управление системными настройками NetBypass"
+                               Margin="0,6,0,0"
+                               Foreground="#9095A6"/>
+                </StackPanel>
+
+                <StackPanel Grid.Row="1"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            MaxWidth="570">
+                    <Button Command="{Binding PowerCommand}"
+                            Style="{StaticResource PowerButton}"
+                            ToolTip="{Binding PowerButtonLabel}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <TextBlock Text="⏻"
+                                       HorizontalAlignment="Center"
+                                       FontSize="58"
+                                       Foreground="{Binding StateAccent}"/>
+                            <TextBlock Text="{Binding PowerButtonLabel}"
+                                       Margin="0,8,0,0"
+                                       HorizontalAlignment="Center"
+                                       FontSize="17"
+                                       FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+
+                    <TextBlock Text="{Binding StateTitle}"
+                               Margin="0,24,0,0"
+                               HorizontalAlignment="Center"
+                               FontSize="23"
+                               FontWeight="SemiBold"
+                               Foreground="{Binding StateAccent}"/>
+                    <TextBlock Text="{Binding StateDescription}"
+                               Margin="0,9,0,0"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               FontSize="14"
+                               Foreground="#A5A9B8"/>
+
+                    <Border Margin="0,24,0,0"
+                            Padding="16,12"
+                            CornerRadius="10"
+                            Background="#181A22">
+                        <TextBlock Text="NetBypass продолжает работать после закрытия программы и перезагрузки компьютера."
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   Foreground="#B6BAC8"/>
+                    </Border>
+
+                    <TextBlock Text="{Binding OperationMessage}"
+                               Visibility="{Binding HasOperationMessage, Converter={StaticResource BooleanToVisibility}}"
+                               Margin="0,14,0,0"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               Foreground="#8F94A5"/>
+                </StackPanel>
+
+                <Grid Grid.Row="2" Margin="42,0,42,30">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Восстановление удаляет только записи NetBypass"
+                               VerticalAlignment="Center"
+                               Foreground="#737889"/>
+                    <Button Grid.Column="1"
+                            Content="Восстановить hosts"
+                            Click="RestoreHosts_Click"
+                            Foreground="#FF8A96"/>
+                </Grid>
+            </Grid>
+
+            <Grid Visibility="{Binding IsServicesPage, Converter={StaticResource BooleanToVisibility}}"
+                  Margin="36,30,36,26">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel>
+                    <TextBlock Text="Сервисы"
+                               FontSize="28"
+                               FontWeight="Bold"/>
+                    <TextBlock Text="Выберите сайты и приложения, для которых будут применены записи"
+                               Margin="0,6,0,0"
+                               Foreground="#9095A6"/>
+                </StackPanel>
+
+                <Grid Grid.Row="1" Margin="0,22,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding StateTitle}"
+                               VerticalAlignment="Center"
+                               Foreground="{Binding StateAccent}"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <Button Content="Выбрать всё" Command="{Binding SelectAllCommand}"/>
+                        <Button Content="Снять всё" Command="{Binding ClearAllCommand}"/>
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="2"
+                        Background="{StaticResource PanelBrush}"
+                        CornerRadius="14"
+                        Padding="14">
+                    <ListView ItemsSource="{Binding ServicesView}"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              Foreground="#F5F5F7"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Focusable" Value="False"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListViewItem">
+                                            <Border Background="Transparent"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="17"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#AFA0FF"
+                                                   Margin="4,16,4,8"/>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListView.GroupStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="4,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              Content="{Binding Name}"
+                                              FontSize="15"
+                                              VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1"
+                                               Foreground="#8D909D"
+                                               Text="{Binding EntryCount, StringFormat={}{0} доменов}"
+                                               Margin="20,0,4,0"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Border>
+
+                <Grid Grid.Row="3" Margin="0,18,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Изменения вступят в силу только после сохранения"
+                               VerticalAlignment="Center"
+                               Foreground="#777C8D"/>
+                    <Button Grid.Column="1"
+                            Content="Сохранить и применить"
+                            Command="{Binding ApplyCommand}"
+                            Style="{StaticResource PrimaryButton}"/>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>
