@@ -147,6 +147,24 @@
                             <TextBlock Text="Сервисы" FontSize="14"/>
                         </StackPanel>
                     </Button>
+
+                    <Button Command="{Binding ShowDiagnosticsCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button"
+                                   BasedOn="{StaticResource NavigationButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDiagnosticsPage}" Value="True">
+                                        <Setter Property="Background" Value="#29253D"/>
+                                        <Setter Property="Foreground" Value="#C8BCFF"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="◉" FontSize="17" Width="28"/>
+                            <TextBlock Text="Диагностика" FontSize="14"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <StackPanel Grid.Row="3">
@@ -353,6 +371,126 @@
                             Command="{Binding ApplyCommand}"
                             Style="{StaticResource PrimaryButton}"/>
                 </Grid>
+            </Grid>
+
+            <Grid Visibility="{Binding IsDiagnosticsPage, Converter={StaticResource BooleanToVisibility}}"
+                  Margin="36,30,36,26">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Диагностика"
+                                   FontSize="28"
+                                   FontWeight="Bold"/>
+                        <TextBlock Text="Проверка настоящего DNS, целевого TCP и TLS-сертификата"
+                                   Margin="0,6,0,0"
+                                   Foreground="#9095A6"/>
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Content="Проверить выбранное"
+                            Command="{Binding DiagnoseCommand}"
+                            Style="{StaticResource PrimaryButton}"
+                            VerticalAlignment="Center"/>
+                </Grid>
+
+                <Border Grid.Row="1"
+                        Margin="0,20,0,12"
+                        Padding="14,11"
+                        CornerRadius="10"
+                        Background="#181A22">
+                    <StackPanel>
+                        <TextBlock Text="{Binding OperationMessage}"
+                                   Foreground="#B8BBC7"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Text="Успешная проверка означает, что статический адрес принимает TCP и корректный TLS для домена. Это ещё не гарантирует отсутствие регионального ограничения внутри сервиса."
+                                   Margin="0,7,0,0"
+                                   Foreground="#777C8D"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="2"
+                        Background="{StaticResource PanelBrush}"
+                        CornerRadius="14"
+                        Padding="8">
+                    <ListView ItemsSource="{Binding Diagnostics}"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              Foreground="#F5F5F7"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Focusable" Value="False"/>
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="4"
+                                        Padding="14"
+                                        CornerRadius="10"
+                                        Background="#20232D">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="1.2*"/>
+                                            <ColumnDefinition Width="1.2*"/>
+                                            <ColumnDefinition Width="1.8*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding ServiceName}"
+                                                       FontWeight="SemiBold"
+                                                       FontSize="15"/>
+                                            <TextBlock Text="{Binding CheckedAt}"
+                                                       Margin="0,5,0,0"
+                                                       Foreground="#777C8D"
+                                                       FontSize="11"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Целевой адрес"
+                                                       Foreground="#777C8D"
+                                                       FontSize="11"/>
+                                            <TextBlock Text="{Binding TargetAddress}"
+                                                       Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Настоящий DoH-ответ"
+                                                       Foreground="#777C8D"
+                                                       FontSize="11"/>
+                                            <TextBlock Text="{Binding DnsAddresses}"
+                                                       Margin="0,4,12,0"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Summary}"
+                                                       Margin="0,5,12,0"
+                                                       Foreground="#9095A6"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="3"
+                                                Padding="10,6"
+                                                CornerRadius="8"
+                                                Background="#171920"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding StatusText}"
+                                                       Foreground="{Binding StatusColor}"
+                                                       FontWeight="SemiBold"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Border>
             </Grid>
         </Grid>
     </Grid>

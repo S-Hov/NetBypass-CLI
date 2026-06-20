@@ -7,15 +7,16 @@ public sealed class ServiceItemViewModel : ObservableObject
 {
     private bool _isSelected;
 
-    public ServiceItemViewModel(ServiceModule module, bool isSelected)
+    public ServiceItemViewModel(ServiceProfile profile, bool isSelected)
     {
-        Module = module;
+        Profile = profile;
         _isSelected = isSelected;
     }
 
-    public ServiceModule Module { get; }
-    public string Name => Module.Name;
-    public string Category => Module.Category;
+    public ServiceProfile Profile { get; }
+    public ServiceModule Module => Profile.Module;
+    public string Name => Profile.Name;
+    public string Category => Profile.Category;
     public int EntryCount => Module.Entries.Count;
 
     public bool IsSelected
