@@ -4,6 +4,14 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>NetBypass</AssemblyName>
+    <RootNamespace>NetBypass.App</RootNamespace>
+    <Product>NetBypass</Product>
+    <Company>S-Hov</Company>
+    <Authors>S-Hov</Authors>
+    <Version>0.1.0</Version>
+    <FileVersion>0.1.0.0</FileVersion>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
   </PropertyGroup>
 
   <ItemGroup>
