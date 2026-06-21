@@ -32,6 +32,10 @@ public sealed class MainViewModel : ObservableObject
     private string _operationMessage = string.Empty;
     private AppPage _currentPage = AppPage.Home;
     private bool _isBusy;
+    private int _diagnosticCompleted;
+    private int _diagnosticTotal;
+    private string _currentDiagnosticService = string.Empty;
+    private HashSet<string> _unavailableServiceIds = new(StringComparer.OrdinalIgnoreCase);
 
     public MainViewModel()
     {
@@ -66,6 +70,9 @@ public sealed class MainViewModel : ObservableObject
         DiagnoseCommand = new AsyncRelayCommand(
             DiagnoseSelectedAsync,
             () => !IsBusy && Services.Any(item => item.IsSelected));
+        ApplyReachableCommand = new AsyncRelayCommand(
+            ApplyReachableServicesAsync,
+            () => !IsBusy && _unavailableServiceIds.Count > 0);
         SelectAllCommand = new RelayCommand(() => SetAll(true));
         ClearAllCommand = new RelayCommand(() => SetAll(false));
         ShowHomeCommand = new RelayCommand(() => CurrentPage = AppPage.Home);
@@ -81,6 +88,7 @@ public sealed class MainViewModel : ObservableObject
     public AsyncRelayCommand PowerCommand { get; }
     public AsyncRelayCommand ApplyCommand { get; }
     public AsyncRelayCommand DiagnoseCommand { get; }
+    public AsyncRelayCommand ApplyReachableCommand { get; }
     public RelayCommand SelectAllCommand { get; }
     public RelayCommand ClearAllCommand { get; }
     public RelayCommand ShowHomeCommand { get; }
@@ -134,6 +142,8 @@ public sealed class MainViewModel : ObservableObject
                 return;
 
             RaiseStateProperties();
+            OnPropertyChanged(nameof(HasDiagnosticProgress));
+            OnPropertyChanged(nameof(DiagnosticButtonText));
         }
     }
 
@@ -142,6 +152,56 @@ public sealed class MainViewModel : ObservableObject
     public bool IsDiagnosticsPage => CurrentPage == AppPage.Diagnostics;
     public bool IsPowerOn => HostsState is HostsState.Active or HostsState.ChangesPending;
     public bool IsCorrupted => HostsState == HostsState.Corrupted;
+    public bool HasUnavailableServices => _unavailableServiceIds.Count > 0;
+    public bool HasDiagnosticProgress => IsBusy && DiagnosticTotal > 0;
+    public string DiagnosticButtonText => IsBusy ? "Идёт проверка" : "Проверить выбранное";
+
+    public int DiagnosticCompleted
+    {
+        get => _diagnosticCompleted;
+        private set
+        {
+            if (SetProperty(ref _diagnosticCompleted, value))
+            {
+                OnPropertyChanged(nameof(DiagnosticProgressText));
+                OnPropertyChanged(nameof(DiagnosticProgressPercent));
+            }
+        }
+    }
+
+    public int DiagnosticTotal
+    {
+        get => _diagnosticTotal;
+        private set
+        {
+            if (SetProperty(ref _diagnosticTotal, value))
+            {
+                OnPropertyChanged(nameof(DiagnosticProgressText));
+                OnPropertyChanged(nameof(DiagnosticProgressPercent));
+                OnPropertyChanged(nameof(HasDiagnosticProgress));
+            }
+        }
+    }
+
+    public double DiagnosticProgressPercent =>
+        DiagnosticTotal == 0 ? 0 : (double)DiagnosticCompleted / DiagnosticTotal * 100;
+
+    public string CurrentDiagnosticService
+    {
+        get => _currentDiagnosticService;
+        private set
+        {
+            if (SetProperty(ref _currentDiagnosticService, value))
+                OnPropertyChanged(nameof(DiagnosticProgressText));
+        }
+    }
+
+    public string DiagnosticProgressText => DiagnosticTotal == 0
+        ? string.Empty
+        : $"Проверено {DiagnosticCompleted} из {DiagnosticTotal}"
+          + (string.IsNullOrWhiteSpace(CurrentDiagnosticService)
+              ? string.Empty
+              : $" · {CurrentDiagnosticService}");
 
     public string PowerButtonLabel => IsBusy
         ? "Проверка..."
@@ -266,7 +326,7 @@ public sealed class MainViewModel : ObservableObject
         OperationMessage = string.Empty;
         try
         {
-            var results = await DiagnoseAsync(selected);
+            var results = await DiagnoseWithProgressAsync(selected);
             SaveAndDisplayDiagnostics(results);
 
             var failed = results.Where(result => !result.IsReachable).ToArray();
@@ -274,7 +334,8 @@ public sealed class MainViewModel : ObservableObject
             {
                 VerificationState = VerificationState.Unavailable;
                 OperationMessage =
-                    $"Применение отменено: недоступно сервисов — {failed.Length}. Откройте «Диагностика».";
+                    $"Применение отменено: недоступно сервисов — {failed.Length}. "
+                    + "Исключите их, чтобы применить остальные рабочие сервисы.";
                 CurrentPage = AppPage.Diagnostics;
                 return;
             }
@@ -306,14 +367,14 @@ public sealed class MainViewModel : ObservableObject
         OperationMessage = string.Empty;
         try
         {
-            var results = await DiagnoseAsync(selected);
+            var results = await DiagnoseWithProgressAsync(selected);
             SaveAndDisplayDiagnostics(results);
             VerificationState = results.All(result => result.IsReachable)
                 ? VerificationState.Verified
                 : VerificationState.Unavailable;
             OperationMessage = results.All(result => result.IsReachable)
                 ? "Все выбранные адреса прошли TCP/TLS-проверку."
-                : "Часть адресов недоступна. Подробности показаны ниже.";
+                : "Часть адресов недоступна. Их можно исключить и применить остальные сервисы.";
         }
         catch (Exception exception)
         {
@@ -326,24 +387,66 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private async Task<IReadOnlyList<ServiceDiagnosticResult>> DiagnoseAsync(
+    private async Task ApplyReachableServicesAsync()
+    {
+        if (_unavailableServiceIds.Count == 0)
+            return;
+
+        foreach (var service in Services.Where(item =>
+                     _unavailableServiceIds.Contains(item.Profile.Id)))
+        {
+            service.IsSelected = false;
+        }
+
+        var remaining = Services.Count(item => item.IsSelected);
+        if (remaining == 0)
+        {
+            OperationMessage = "Все выбранные сервисы недоступны. Применять нечего.";
+            return;
+        }
+
+        OperationMessage =
+            $"Недоступные сервисы исключены. Проверяем оставшиеся: {remaining}.";
+        await ApplySelectedServicesAsync();
+    }
+
+    private async Task<IReadOnlyList<ServiceDiagnosticResult>> DiagnoseWithProgressAsync(
         IReadOnlyCollection<ServiceItemViewModel> selected)
     {
+        DiagnosticTotal = selected.Count;
+        DiagnosticCompleted = 0;
+        CurrentDiagnosticService = string.Empty;
+        Diagnostics.Clear();
+
         using var semaphore = new SemaphoreSlim(6);
-        var tasks = selected.Select(async item =>
+        var pending = selected.Select(async item =>
         {
             await semaphore.WaitAsync();
             try
             {
-                return await _diagnosticService.DiagnoseAsync(item.Profile);
+                var result = await _diagnosticService.DiagnoseAsync(item.Profile);
+                return (Item: item, Result: result);
             }
             finally
             {
                 semaphore.Release();
             }
-        });
+        }).ToList();
 
-        return await Task.WhenAll(tasks);
+        var results = new List<ServiceDiagnosticResult>(selected.Count);
+        while (pending.Count > 0)
+        {
+            var completedTask = await Task.WhenAny(pending);
+            pending.Remove(completedTask);
+            var completed = await completedTask;
+            results.Add(completed.Result);
+            DiagnosticCompleted++;
+            CurrentDiagnosticService = completed.Item.Name;
+            Diagnostics.Add(new DiagnosticItemViewModel(completed.Result));
+        }
+
+        CurrentDiagnosticService = string.Empty;
+        return results;
     }
 
     private void SaveAndDisplayDiagnostics(
@@ -351,9 +454,12 @@ public sealed class MainViewModel : ObservableObject
     {
         var snapshot = new DiagnosticSnapshot(DateTimeOffset.UtcNow, results);
         _diagnosticStore.Save(snapshot);
-        Diagnostics.Clear();
-        foreach (var result in results.OrderBy(result => result.ServiceName))
-            Diagnostics.Add(new DiagnosticItemViewModel(result));
+        _unavailableServiceIds = results
+            .Where(result => !result.IsReachable)
+            .Select(result => result.ServiceId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        OnPropertyChanged(nameof(HasUnavailableServices));
+        ApplyReachableCommand.RaiseCanExecuteChanged();
     }
 
     private void LoadStoredDiagnostics()
@@ -364,6 +470,11 @@ public sealed class MainViewModel : ObservableObject
 
         foreach (var result in snapshot.Services.OrderBy(result => result.ServiceName))
             Diagnostics.Add(new DiagnosticItemViewModel(result));
+
+        _unavailableServiceIds = snapshot.Services
+            .Where(result => !result.IsReachable)
+            .Select(result => result.ServiceId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     private void SetAll(bool value)
@@ -381,6 +492,7 @@ public sealed class MainViewModel : ObservableObject
         RefreshState();
         ApplyCommand.RaiseCanExecuteChanged();
         DiagnoseCommand.RaiseCanExecuteChanged();
+        ApplyReachableCommand.RaiseCanExecuteChanged();
     }
 
     private void RefreshState()
@@ -424,6 +536,7 @@ public sealed class MainViewModel : ObservableObject
         PowerCommand?.RaiseCanExecuteChanged();
         ApplyCommand?.RaiseCanExecuteChanged();
         DiagnoseCommand?.RaiseCanExecuteChanged();
+        ApplyReachableCommand?.RaiseCanExecuteChanged();
     }
 
     private void RunSafely(Action action)
