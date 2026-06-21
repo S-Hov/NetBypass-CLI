@@ -153,6 +153,27 @@ public sealed class MainViewModel : ObservableObject
     public bool IsPowerOn => HostsState is HostsState.Active or HostsState.ChangesPending;
     public bool IsCorrupted => HostsState == HostsState.Corrupted;
     public bool HasUnavailableServices => _unavailableServiceIds.Count > 0;
+    public bool HasAvailabilitySummary => IsPowerOn && SelectedServiceCount > 0;
+    public bool HasPartialAvailability =>
+        HasAvailabilitySummary && AvailableServiceCount < SelectedServiceCount;
+    public int SelectedServiceCount => Services.Count(item => item.IsSelected);
+    public int AvailableServiceCount
+    {
+        get
+        {
+            var snapshot = _diagnosticStore.Load();
+            if (snapshot is null)
+                return 0;
+
+            var selectedIds = Services.Where(item => item.IsSelected)
+                .Select(item => item.Profile.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return snapshot.Services.Count(result =>
+                result.IsReachable && selectedIds.Contains(result.ServiceId));
+        }
+    }
+    public string AvailabilitySummary =>
+        $"Доступно сервисов: {AvailableServiceCount} из {SelectedServiceCount}";
     public bool HasDiagnosticProgress => IsBusy && DiagnosticTotal > 0;
     public string DiagnosticButtonText => IsBusy ? "Идёт проверка" : "Проверить выбранное";
 
@@ -222,7 +243,9 @@ public sealed class MainViewModel : ObservableObject
             if (HostsState != HostsState.Corrupted
                 && VerificationState == VerificationState.Unavailable)
             {
-                return "Проверка доступности не пройдена";
+                return IsPowerOn
+                    ? "Записи применены частично"
+                    : "Нет доступных сервисов";
             }
 
             return HostsState switch
@@ -231,7 +254,9 @@ public sealed class MainViewModel : ObservableObject
                 HostsState.ChangesPending => "Требуется применить изменения",
                 HostsState.Corrupted => "Файл hosts требует внимания",
                 HostsState.Active when VerificationState == VerificationState.Verified =>
-                    "Записи применены и проверены",
+                    HasPartialAvailability
+                        ? "Записи применены частично"
+                        : "Все выбранные сервисы доступны",
                 HostsState.Active => "Записи применены, проверка устарела",
                 _ => "Неизвестное состояние"
             };
@@ -248,7 +273,9 @@ public sealed class MainViewModel : ObservableObject
             if (HostsState != HostsState.Corrupted
                 && VerificationState == VerificationState.Unavailable)
             {
-                return "Один или несколько статических адресов не прошли TCP/TLS-проверку. Конфигурация не будет применена повторно.";
+                return IsPowerOn
+                    ? AvailabilitySummary
+                    : "Ни один выбранный сервис не прошёл проверку доступности.";
             }
 
             return HostsState switch
@@ -257,7 +284,7 @@ public sealed class MainViewModel : ObservableObject
                 HostsState.ChangesPending => "Откройте «Сервисы» и сохраните выбранный список.",
                 HostsState.Corrupted => "Используйте восстановление управляемого блока.",
                 HostsState.Active when VerificationState == VerificationState.Verified =>
-                    "Адреса доступны. Приложение можно закрыть.",
+                    AvailabilitySummary,
                 HostsState.Active => "Откройте диагностику и повторите проверку.",
                 _ => string.Empty
             };
@@ -269,6 +296,7 @@ public sealed class MainViewModel : ObservableObject
         : HostsState switch
         {
             HostsState.Active when VerificationState == VerificationState.Verified => "#61D6A3",
+            HostsState.Active when VerificationState == VerificationState.Unavailable => "#F2B84B",
             _ when VerificationState == VerificationState.Unavailable => "#FF6B7A",
             HostsState.Active => "#F2B84B",
             HostsState.ChangesPending => "#F2B84B",
@@ -330,20 +358,26 @@ public sealed class MainViewModel : ObservableObject
             SaveAndDisplayDiagnostics(results);
 
             var failed = results.Where(result => !result.IsReachable).ToArray();
-            if (failed.Length > 0)
+            var reachableIds = results.Where(result => result.IsReachable)
+                .Select(result => result.ServiceId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var reachable = selected.Where(item => reachableIds.Contains(item.Profile.Id))
+                .ToArray();
+
+            if (reachable.Length == 0)
             {
                 VerificationState = VerificationState.Unavailable;
                 OperationMessage =
-                    $"Применение отменено: недоступно сервисов — {failed.Length}. "
-                    + "Исключите их, чтобы применить остальные рабочие сервисы.";
-                CurrentPage = AppPage.Diagnostics;
+                    "Не удалось применить записи: ни один выбранный сервис не прошёл проверку.";
                 return;
             }
 
-            _hostsService.Apply(selected.Select(item => item.Module));
+            _hostsService.Apply(reachable.Select(item => item.Module));
             DnsCacheService.Flush();
             _settingsService.Save(selected.Select(item => item.Module.Id));
-            OperationMessage = $"Проверено и применено сервисов: {selected.Length}.";
+            OperationMessage = failed.Length == 0
+                ? $"Все выбранные сервисы доступны: {reachable.Length} из {selected.Length}."
+                : $"Записи применены. Доступно сервисов: {reachable.Length} из {selected.Length}.";
             RefreshState();
         }
         catch (Exception exception)
@@ -459,6 +493,7 @@ public sealed class MainViewModel : ObservableObject
             .Select(result => result.ServiceId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         OnPropertyChanged(nameof(HasUnavailableServices));
+        RaiseAvailabilityProperties();
         ApplyReachableCommand.RaiseCanExecuteChanged();
     }
 
@@ -475,6 +510,7 @@ public sealed class MainViewModel : ObservableObject
             .Where(result => !result.IsReachable)
             .Select(result => result.ServiceId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        RaiseAvailabilityProperties();
     }
 
     private void SetAll(bool value)
@@ -498,8 +534,32 @@ public sealed class MainViewModel : ObservableObject
     private void RefreshState()
     {
         var selected = Services.Where(item => item.IsSelected).ToArray();
-        HostsState = _hostsService.GetState(selected.Select(item => item.Module));
+        HostsState = _hostsService.GetState(GetExpectedActiveModules(selected));
         VerificationState = DetermineVerificationState(selected);
+        RaiseAvailabilityProperties();
+    }
+
+    private IEnumerable<ServiceModule> GetExpectedActiveModules(
+        IReadOnlyCollection<ServiceItemViewModel> selected)
+    {
+        var snapshot = _diagnosticStore.Load();
+        if (snapshot is null)
+            return selected.Select(item => item.Module);
+
+        var selectedIds = selected.Select(item => item.Profile.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var resultIds = snapshot.Services.Select(result => result.ServiceId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (!selectedIds.SetEquals(resultIds))
+            return selected.Select(item => item.Module);
+
+        var reachableIds = snapshot.Services
+            .Where(result => result.IsReachable)
+            .Select(result => result.ServiceId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return selected.Where(item => reachableIds.Contains(item.Profile.Id))
+            .Select(item => item.Module);
     }
 
     private VerificationState DetermineVerificationState(
@@ -537,6 +597,16 @@ public sealed class MainViewModel : ObservableObject
         ApplyCommand?.RaiseCanExecuteChanged();
         DiagnoseCommand?.RaiseCanExecuteChanged();
         ApplyReachableCommand?.RaiseCanExecuteChanged();
+        RaiseAvailabilityProperties();
+    }
+
+    private void RaiseAvailabilityProperties()
+    {
+        OnPropertyChanged(nameof(SelectedServiceCount));
+        OnPropertyChanged(nameof(AvailableServiceCount));
+        OnPropertyChanged(nameof(AvailabilitySummary));
+        OnPropertyChanged(nameof(HasAvailabilitySummary));
+        OnPropertyChanged(nameof(HasPartialAvailability));
     }
 
     private void RunSafely(Action action)

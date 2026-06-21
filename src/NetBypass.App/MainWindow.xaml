@@ -269,6 +269,12 @@
                                HorizontalAlignment="Center"
                                TextAlignment="Center"
                                Foreground="#8F94A5"/>
+
+                    <Button Content="Посмотреть доступные и недоступные сервисы"
+                            Command="{Binding ShowDiagnosticsCommand}"
+                            Visibility="{Binding HasPartialAvailability, Converter={StaticResource BooleanToVisibility}}"
+                            Margin="0,16,0,0"
+                            Padding="18,11"/>
                 </StackPanel>
 
                 <Grid Grid.Row="2" Margin="42,0,42,30">
