@@ -32,6 +32,7 @@ public sealed class MainViewModel : ObservableObject
     private string _operationMessage = string.Empty;
     private AppPage _currentPage = AppPage.Home;
     private bool _isBusy;
+    private PowerOperation _powerOperation;
     private int _diagnosticCompleted;
     private int _diagnosticTotal;
     private string _currentDiagnosticService = string.Empty;
@@ -147,11 +148,29 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public PowerOperation PowerOperation
+    {
+        get => _powerOperation;
+        private set
+        {
+            if (!SetProperty(ref _powerOperation, value))
+                return;
+
+            OnPropertyChanged(nameof(IsConnecting));
+            OnPropertyChanged(nameof(IsDisconnecting));
+            OnPropertyChanged(nameof(IsPowerTransitioning));
+            OnPropertyChanged(nameof(PowerButtonLabel));
+        }
+    }
+
     public bool IsHomePage => CurrentPage == AppPage.Home;
     public bool IsServicesPage => CurrentPage == AppPage.Services;
     public bool IsDiagnosticsPage => CurrentPage == AppPage.Diagnostics;
     public bool IsPowerOn => HostsState is HostsState.Active or HostsState.ChangesPending;
     public bool IsCorrupted => HostsState == HostsState.Corrupted;
+    public bool IsConnecting => PowerOperation == PowerOperation.Connecting;
+    public bool IsDisconnecting => PowerOperation == PowerOperation.Disconnecting;
+    public bool IsPowerTransitioning => PowerOperation != PowerOperation.None;
     public bool HasUnavailableServices => _unavailableServiceIds.Count > 0;
     public bool HasAvailabilitySummary => IsPowerOn && SelectedServiceCount > 0;
     public bool HasPartialAvailability =>
@@ -224,14 +243,19 @@ public sealed class MainViewModel : ObservableObject
               ? string.Empty
               : $" · {CurrentDiagnosticService}");
 
-    public string PowerButtonLabel => IsBusy
+    public string PowerButtonLabel => PowerOperation switch
+    {
+        PowerOperation.Connecting => "Подключение...",
+        PowerOperation.Disconnecting => "Отключение...",
+        _ => IsBusy
         ? "Проверка..."
         : HostsState switch
         {
             HostsState.Inactive => "Включить",
             HostsState.Active or HostsState.ChangesPending => "Отключить",
             _ => "Недоступно"
-        };
+        }
+    };
 
     public string StateTitle
     {
@@ -331,17 +355,37 @@ public sealed class MainViewModel : ObservableObject
     {
         if (IsPowerOn)
         {
-            RunSafely(() =>
+            PowerOperation = PowerOperation.Disconnecting;
+            try
             {
                 _hostsService.Disable();
                 DnsCacheService.Flush();
                 OperationMessage = "NetBypass отключён.";
                 RefreshState();
-            });
+                await Task.Delay(450);
+            }
+            catch (Exception exception)
+            {
+                OperationMessage = $"Ошибка: {exception.Message}";
+                RefreshState();
+            }
+            finally
+            {
+                PowerOperation = PowerOperation.None;
+            }
             return;
         }
 
-        await ApplySelectedServicesAsync();
+        PowerOperation = PowerOperation.Connecting;
+        try
+        {
+            await ApplySelectedServicesAsync();
+            await Task.Delay(450);
+        }
+        finally
+        {
+            PowerOperation = PowerOperation.None;
+        }
     }
 
     private async Task ApplySelectedServicesAsync()
@@ -635,4 +679,11 @@ public enum VerificationState
     NotChecked,
     Verified,
     Unavailable
+}
+
+public enum PowerOperation
+{
+    None,
+    Connecting,
+    Disconnecting
 }

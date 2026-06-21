@@ -49,12 +49,30 @@
                         <Grid>
                             <Ellipse x:Name="OuterGlow"
                                      Fill="{Binding StateAccent}"
-                                     Opacity="0.10"/>
+                                     Opacity="0.10"
+                                     RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform>
+                                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
                             <Ellipse x:Name="Ring"
                                      Margin="10"
                                      Fill="#181A22"
                                      Stroke="{Binding StateAccent}"
                                      StrokeThickness="4"/>
+                            <Ellipse x:Name="TransitionRing"
+                                     Margin="2"
+                                     Fill="Transparent"
+                                     Stroke="{Binding StateAccent}"
+                                     StrokeThickness="5"
+                                     StrokeDashArray="2,5"
+                                     StrokeStartLineCap="Round"
+                                     Visibility="Collapsed"
+                                     RenderTransformOrigin="0.5,0.5">
+                                <Ellipse.RenderTransform>
+                                    <RotateTransform/>
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"/>
                         </Grid>
@@ -70,6 +88,72 @@
                                 <Setter TargetName="OuterGlow" Property="Opacity" Value="0.04"/>
                                 <Setter TargetName="Ring" Property="Opacity" Value="0.42"/>
                             </Trigger>
+                            <DataTrigger Binding="{Binding IsConnecting}" Value="True">
+                                <Setter TargetName="TransitionRing" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="Ring" Property="StrokeThickness" Value="3"/>
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard x:Name="ConnectAnimation">
+                                        <Storyboard>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="TransitionRing"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                From="0" To="360"
+                                                Duration="0:0:1.1"
+                                                RepeatBehavior="Forever"/>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="OuterGlow"
+                                                Storyboard.TargetProperty="Opacity"
+                                                From="0.08" To="0.28"
+                                                Duration="0:0:0.7"
+                                                AutoReverse="True"
+                                                RepeatBehavior="Forever"/>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="OuterGlow"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                From="0.96" To="1.04"
+                                                Duration="0:0:0.7"
+                                                AutoReverse="True"
+                                                RepeatBehavior="Forever"/>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="OuterGlow"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                From="0.96" To="1.04"
+                                                Duration="0:0:0.7"
+                                                AutoReverse="True"
+                                                RepeatBehavior="Forever"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <StopStoryboard BeginStoryboardName="ConnectAnimation"/>
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsDisconnecting}" Value="True">
+                                <Setter TargetName="TransitionRing" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="Ring" Property="StrokeThickness" Value="3"/>
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard x:Name="DisconnectAnimation">
+                                        <Storyboard>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="TransitionRing"
+                                                Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                From="360" To="0"
+                                                Duration="0:0:0.75"
+                                                RepeatBehavior="Forever"/>
+                                            <DoubleAnimation
+                                                Storyboard.TargetName="OuterGlow"
+                                                Storyboard.TargetProperty="Opacity"
+                                                From="0.22" To="0.04"
+                                                Duration="0:0:0.45"
+                                                AutoReverse="True"
+                                                RepeatBehavior="Forever"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <StopStoryboard BeginStoryboardName="DisconnectAnimation"/>
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
