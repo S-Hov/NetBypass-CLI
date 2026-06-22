@@ -89,6 +89,11 @@ public sealed class HostsFileServiceTests
         Assert.Contains("10.0.0.2 intranet", result);
         Assert.DoesNotContain("example.com", result);
         Assert.DoesNotContain(HostsFileService.BeginMarker, result);
+        Assert.DoesNotContain(HostsFileService.EndMarker, result);
+        Assert.Equal(HostsState.Inactive, fixture.Service.GetState([DemoModule]));
+        Assert.Empty(Directory.GetFiles(
+            Path.GetDirectoryName(fixture.HostsPath)!,
+            ".netbypass-*.tmp"));
     }
 
     [Fact]

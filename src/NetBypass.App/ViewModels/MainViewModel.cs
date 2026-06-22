@@ -264,6 +264,9 @@ public sealed class MainViewModel : ObservableObject
             if (IsBusy)
                 return "Диагностика подключения";
 
+            if (HostsState == HostsState.Inactive)
+                return "Не настроено";
+
             if (HostsState != HostsState.Corrupted
                 && VerificationState == VerificationState.Unavailable)
             {
@@ -274,7 +277,6 @@ public sealed class MainViewModel : ObservableObject
 
             return HostsState switch
             {
-                HostsState.Inactive => "Не настроено",
                 HostsState.ChangesPending => "Требуется применить изменения",
                 HostsState.Corrupted => "Файл hosts требует внимания",
                 HostsState.Active when VerificationState == VerificationState.Verified =>
@@ -294,6 +296,9 @@ public sealed class MainViewModel : ObservableObject
             if (IsBusy)
                 return "Проверяем DoH, TCP и TLS для выбранных сервисов.";
 
+            if (HostsState == HostsState.Inactive)
+                return "Перед включением NetBypass проверит доступность адресов.";
+
             if (HostsState != HostsState.Corrupted
                 && VerificationState == VerificationState.Unavailable)
             {
@@ -304,7 +309,6 @@ public sealed class MainViewModel : ObservableObject
 
             return HostsState switch
             {
-                HostsState.Inactive => "Перед включением NetBypass проверит доступность адресов.",
                 HostsState.ChangesPending => "Откройте «Сервисы» и сохраните выбранный список.",
                 HostsState.Corrupted => "Используйте восстановление управляемого блока.",
                 HostsState.Active when VerificationState == VerificationState.Verified =>
@@ -319,6 +323,7 @@ public sealed class MainViewModel : ObservableObject
         ? "#7C5CFC"
         : HostsState switch
         {
+            HostsState.Inactive => "#7C5CFC",
             HostsState.Active when VerificationState == VerificationState.Verified => "#61D6A3",
             HostsState.Active when VerificationState == VerificationState.Unavailable => "#F2B84B",
             _ when VerificationState == VerificationState.Unavailable => "#FF6B7A",
@@ -360,7 +365,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 _hostsService.Disable();
                 DnsCacheService.Flush();
-                OperationMessage = "NetBypass отключён.";
+                OperationMessage = string.Empty;
                 RefreshState();
                 await Task.Delay(450);
             }
@@ -609,6 +614,12 @@ public sealed class MainViewModel : ObservableObject
     private VerificationState DetermineVerificationState(
         IReadOnlyCollection<ServiceItemViewModel> selected)
     {
+        // Диагностика описывает доступность адресов, но не состояние NetBypass.
+        // После удаления управляемого блока отключённый экран должен быть таким же,
+        // как при первом запуске, независимо от сохранённых результатов проверки.
+        if (HostsState == HostsState.Inactive)
+            return VerificationState.NotChecked;
+
         var snapshot = _diagnosticStore.Load();
         if (snapshot is null
             || DateTimeOffset.UtcNow - snapshot.CreatedAt > VerificationLifetime)
