@@ -1,7 +1,7 @@
 param(
     [Parameter()]
     [ValidatePattern('^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$')]
-    [string]$Version = '0.1.0'
+    [string]$Version = '0.2.0'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,7 +14,7 @@ $installerScript = Join-Path $root 'installer\NetBypass.iss'
 $innoCompiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
 
 if (-not (Test-Path -LiteralPath $innoCompiler)) {
-    throw 'Inno Setup 6 не найден. Установите его с https://jrsoftware.org/isinfo.php'
+    throw 'Inno Setup 6 was not found. Install it from https://jrsoftware.org/isinfo.php'
 }
 
 Remove-Item -LiteralPath $publishDirectory -Recurse -Force -ErrorAction SilentlyContinue
@@ -23,7 +23,7 @@ New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
 
 dotnet test (Join-Path $root 'NetBypass.sln') -c Release
 if ($LASTEXITCODE -ne 0) {
-    throw 'Тесты завершились с ошибкой.'
+    throw 'Tests failed.'
 }
 
 dotnet publish $project `
@@ -37,7 +37,7 @@ dotnet publish $project `
     -p:Version=$Version `
     -o $publishDirectory
 if ($LASTEXITCODE -ne 0) {
-    throw 'Публикация приложения завершилась с ошибкой.'
+    throw 'Application publish failed.'
 }
 
 $portableArchive = Join-Path $releaseDirectory "NetBypass-v$Version-win-x64-portable.zip"
@@ -46,7 +46,7 @@ Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $porta
 
 & $innoCompiler "/DAppVersion=$Version" $installerScript
 if ($LASTEXITCODE -ne 0) {
-    throw 'Сборка установщика завершилась с ошибкой.'
+    throw 'Installer build failed.'
 }
 
 $checksumPath = Join-Path $releaseDirectory 'SHA256SUMS.txt'
