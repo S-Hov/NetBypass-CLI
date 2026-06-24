@@ -97,6 +97,49 @@ public sealed class HostsFileServiceTests
     }
 
     [Fact]
+    public void VerifyCleanup_AfterDisable_ReturnsCleanReport()
+    {
+        using var fixture = new HostsFixture("127.0.0.1 localhost");
+        fixture.Service.Apply([DemoModule]);
+        fixture.Service.Disable();
+
+        var result = fixture.Service.VerifyCleanup([DemoModule]);
+
+        Assert.True(result.IsClean);
+        Assert.Empty(result.Issues);
+        Assert.Contains("В hosts нет активного блока NetBypass.", result.CompletedChecks);
+        Assert.Contains("Маркеры NetBypass удалены.", result.CompletedChecks);
+        Assert.Contains("Временные файлы NetBypass не найдены.", result.CompletedChecks);
+    }
+
+    [Fact]
+    public void VerifyCleanup_WithActiveBlock_ReturnsIssues()
+    {
+        using var fixture = new HostsFixture("127.0.0.1 localhost");
+        fixture.Service.Apply([DemoModule]);
+
+        var result = fixture.Service.VerifyCleanup([DemoModule]);
+
+        Assert.False(result.IsClean);
+        Assert.Contains("В hosts остались активные записи NetBypass.", result.Issues);
+        Assert.Contains("В hosts остались маркеры NetBypass.", result.Issues);
+    }
+
+    [Fact]
+    public void VerifyCleanup_WithTemporaryFile_ReturnsIssue()
+    {
+        using var fixture = new HostsFixture("127.0.0.1 localhost");
+        File.WriteAllText(
+            Path.Combine(Path.GetDirectoryName(fixture.HostsPath)!, ".netbypass-leftover.tmp"),
+            "temporary");
+
+        var result = fixture.Service.VerifyCleanup([DemoModule]);
+
+        Assert.False(result.IsClean);
+        Assert.Contains("Остались временные файлы NetBypass: 1.", result.Issues);
+    }
+
+    [Fact]
     public void Restore_CorruptedBlock_RemovesKnownNetBypassLinesOnly()
     {
         var content = "127.0.0.1 localhost\n# NETBYPASS-BEGIN\n# Demo [demo]\n1.2.3.4 example.com\n10.0.0.2 intranet";

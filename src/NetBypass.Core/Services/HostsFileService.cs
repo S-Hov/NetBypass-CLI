@@ -93,6 +93,52 @@ public sealed class HostsFileService
         WriteSafely($"{clean.TrimEnd()}{Environment.NewLine}");
     }
 
+    public CleanupVerificationResult VerifyCleanup(IEnumerable<ServiceModule> knownModules)
+    {
+        var completed = new List<string>();
+        var issues = new List<string>();
+
+        if (!File.Exists(_hostsPath))
+        {
+            issues.Add("Системный hosts не найден.");
+            return new CleanupVerificationResult(false, completed, issues);
+        }
+
+        var state = GetState(knownModules);
+        if (state == HostsState.Inactive)
+        {
+            completed.Add("В hosts нет активного блока NetBypass.");
+        }
+        else
+        {
+            issues.Add(state == HostsState.Corrupted
+                ? "В hosts найден повреждённый блок NetBypass."
+                : "В hosts остались активные записи NetBypass.");
+        }
+
+        var content = File.ReadAllText(_hostsPath);
+        if (!content.Contains(BeginMarker, StringComparison.Ordinal)
+            && !content.Contains(EndMarker, StringComparison.Ordinal))
+        {
+            completed.Add("Маркеры NetBypass удалены.");
+        }
+        else
+        {
+            issues.Add("В hosts остались маркеры NetBypass.");
+        }
+
+        var directory = Path.GetDirectoryName(_hostsPath)!;
+        var temporaryFiles = Directory.Exists(directory)
+            ? Directory.GetFiles(directory, ".netbypass-*.tmp")
+            : [];
+        if (temporaryFiles.Length == 0)
+            completed.Add("Временные файлы NetBypass не найдены.");
+        else
+            issues.Add($"Остались временные файлы NetBypass: {temporaryFiles.Length}.");
+
+        return new CleanupVerificationResult(issues.Count == 0, completed, issues);
+    }
+
     public static string BuildManagedBlock(IEnumerable<ServiceModule> modules)
     {
         var builder = new StringBuilder();

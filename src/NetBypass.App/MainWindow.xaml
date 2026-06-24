@@ -354,6 +354,31 @@
                                TextAlignment="Center"
                                Foreground="#8F94A5"/>
 
+                    <Border Visibility="{Binding HasCleanupItems, Converter={StaticResource BooleanToVisibility}}"
+                            Margin="0,14,0,0"
+                            Padding="16,12"
+                            CornerRadius="10"
+                            Background="#181A22"
+                            BorderBrush="#252936"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="{Binding CleanupTitle}"
+                                       FontWeight="SemiBold"
+                                       Foreground="#E5E7F0"/>
+                            <ItemsControl ItemsSource="{Binding CleanupItems}"
+                                          Margin="0,8,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}"
+                                                   Margin="0,3,0,0"
+                                                   Foreground="#A7ABBA"
+                                                   TextWrapping="Wrap"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
                     <Button Content="Посмотреть доступные и недоступные сервисы"
                             Command="{Binding ShowDiagnosticsCommand}"
                             Visibility="{Binding HasPartialAvailability, Converter={StaticResource BooleanToVisibility}}"

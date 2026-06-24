@@ -36,6 +36,7 @@ public sealed class MainViewModel : ObservableObject
     private int _diagnosticCompleted;
     private int _diagnosticTotal;
     private string _currentDiagnosticService = string.Empty;
+    private string _cleanupTitle = string.Empty;
     private HashSet<string> _unavailableServiceIds = new(StringComparer.OrdinalIgnoreCase);
 
     public MainViewModel()
@@ -58,6 +59,7 @@ public sealed class MainViewModel : ObservableObject
             new PropertyGroupDescription(nameof(ServiceItemViewModel.Category)));
 
         Diagnostics = new ObservableCollection<DiagnosticItemViewModel>();
+        CleanupItems = new ObservableCollection<string>();
         LoadStoredDiagnostics();
 
         PowerCommand = new AsyncRelayCommand(
@@ -85,6 +87,7 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<ServiceItemViewModel> Services { get; }
     public ObservableCollection<DiagnosticItemViewModel> Diagnostics { get; }
+    public ObservableCollection<string> CleanupItems { get; }
     public ICollectionView ServicesView { get; }
     public AsyncRelayCommand PowerCommand { get; }
     public AsyncRelayCommand ApplyCommand { get; }
@@ -160,6 +163,7 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(IsDisconnecting));
             OnPropertyChanged(nameof(IsPowerTransitioning));
             OnPropertyChanged(nameof(PowerButtonLabel));
+            RaiseStateProperties();
         }
     }
 
@@ -173,6 +177,12 @@ public sealed class MainViewModel : ObservableObject
     public bool IsPowerTransitioning => PowerOperation != PowerOperation.None;
     public bool HasUnavailableServices => _unavailableServiceIds.Count > 0;
     public bool HasAvailabilitySummary => IsPowerOn && SelectedServiceCount > 0;
+    public bool HasCleanupItems => CleanupItems.Count > 0;
+    public string CleanupTitle
+    {
+        get => _cleanupTitle;
+        private set => SetProperty(ref _cleanupTitle, value);
+    }
     public bool HasPartialAvailability =>
         HasAvailabilitySummary && AvailableServiceCount < SelectedServiceCount;
     public int SelectedServiceCount => Services.Count(item => item.IsSelected);
@@ -261,29 +271,16 @@ public sealed class MainViewModel : ObservableObject
     {
         get
         {
-            if (IsBusy)
-                return "Диагностика подключения";
-
-            if (HostsState == HostsState.Inactive)
-                return "Не настроено";
-
-            if (HostsState != HostsState.Corrupted
-                && VerificationState == VerificationState.Unavailable)
+            return CurrentUiState switch
             {
-                return IsPowerOn
-                    ? "Записи применены частично"
-                    : "Нет доступных сервисов";
-            }
-
-            return HostsState switch
-            {
-                HostsState.ChangesPending => "Требуется применить изменения",
-                HostsState.Corrupted => "Файл hosts требует внимания",
-                HostsState.Active when VerificationState == VerificationState.Verified =>
-                    HasPartialAvailability
-                        ? "Записи применены частично"
-                        : "Все выбранные сервисы доступны",
-                HostsState.Active => "Записи применены, проверка устарела",
+                UiState.Disabled => "Не настроено",
+                UiState.Checking => "Диагностика подключения",
+                UiState.Disabling => "Отключение NetBypass",
+                UiState.ChangesPending => "Требуется применить изменения",
+                UiState.Corrupted => "Файл hosts требует внимания",
+                UiState.ActiveVerified => "Все выбранные сервисы доступны",
+                UiState.ActiveDegraded => "Записи применены частично",
+                UiState.ActiveUnverified => "Записи применены, проверка устарела",
                 _ => "Неизвестное состояние"
             };
         }
@@ -293,45 +290,73 @@ public sealed class MainViewModel : ObservableObject
     {
         get
         {
-            if (IsBusy)
-                return "Проверяем DoH, TCP и TLS для выбранных сервисов.";
-
-            if (HostsState == HostsState.Inactive)
-                return "Перед включением NetBypass проверит доступность адресов.";
-
-            if (HostsState != HostsState.Corrupted
-                && VerificationState == VerificationState.Unavailable)
+            return CurrentUiState switch
             {
-                return IsPowerOn
-                    ? AvailabilitySummary
-                    : "Ни один выбранный сервис не прошёл проверку доступности.";
-            }
-
-            return HostsState switch
-            {
-                HostsState.ChangesPending => "Откройте «Сервисы» и сохраните выбранный список.",
-                HostsState.Corrupted => "Используйте восстановление управляемого блока.",
-                HostsState.Active when VerificationState == VerificationState.Verified =>
-                    AvailabilitySummary,
-                HostsState.Active => "Откройте диагностику и повторите проверку.",
+                UiState.Disabled => "Перед включением NetBypass проверит доступность адресов.",
+                UiState.Checking => "Проверяем DoH, TCP и TLS для выбранных сервисов.",
+                UiState.Disabling => "Удаляем управляемые записи и проверяем очистку.",
+                UiState.ChangesPending => "Откройте «Сервисы» и сохраните выбранный список.",
+                UiState.Corrupted => "Используйте восстановление управляемого блока.",
+                UiState.ActiveVerified => AvailabilitySummary,
+                UiState.ActiveDegraded => AvailabilitySummary,
+                UiState.ActiveUnverified => "Откройте диагностику и повторите проверку.",
                 _ => string.Empty
             };
         }
     }
 
-    public string StateAccent => IsBusy
-        ? "#7C5CFC"
-        : HostsState switch
+    public string StateAccent => CurrentUiState switch
+    {
+        UiState.Disabled => "#7C5CFC",
+        UiState.Checking => "#7C5CFC",
+        UiState.Disabling => "#7C5CFC",
+        UiState.ActiveVerified => "#61D6A3",
+        UiState.ActiveDegraded => "#F2B84B",
+        UiState.ActiveUnverified => "#F2B84B",
+        UiState.ChangesPending => "#F2B84B",
+        UiState.Corrupted => "#FF6B7A",
+        _ => "#7C5CFC"
+    };
+
+    private UiState CurrentUiState
+    {
+        get
         {
-            HostsState.Inactive => "#7C5CFC",
-            HostsState.Active when VerificationState == VerificationState.Verified => "#61D6A3",
-            HostsState.Active when VerificationState == VerificationState.Unavailable => "#F2B84B",
-            _ when VerificationState == VerificationState.Unavailable => "#FF6B7A",
-            HostsState.Active => "#F2B84B",
-            HostsState.ChangesPending => "#F2B84B",
-            HostsState.Corrupted => "#FF6B7A",
-            _ => "#7C5CFC"
-        };
+            if (PowerOperation == PowerOperation.Disconnecting)
+                return UiState.Disabling;
+
+            if (IsBusy)
+                return UiState.Checking;
+
+            if (HostsState == HostsState.Corrupted)
+                return UiState.Corrupted;
+
+            if (HostsState == HostsState.Inactive)
+                return UiState.Disabled;
+
+            if (HostsState == HostsState.ChangesPending)
+                return UiState.ChangesPending;
+
+            if (HostsState == HostsState.Active
+                && VerificationState == VerificationState.Verified
+                && !HasPartialAvailability)
+            {
+                return UiState.ActiveVerified;
+            }
+
+            if (HostsState == HostsState.Active
+                && (VerificationState == VerificationState.Unavailable
+                    || HasPartialAvailability))
+            {
+                return UiState.ActiveDegraded;
+            }
+
+            if (HostsState == HostsState.Active)
+                return UiState.ActiveUnverified;
+
+            return UiState.Unknown;
+        }
+    }
 
     public string OperationMessage
     {
@@ -349,9 +374,14 @@ public sealed class MainViewModel : ObservableObject
     {
         RunSafely(() =>
         {
+            ClearCleanupReport();
             _hostsService.Restore(Services.Select(item => item.Module));
             DnsCacheService.Flush();
-            OperationMessage = "Изменения NetBypass удалены. Остальные записи hosts сохранены.";
+            var cleanup = _hostsService.VerifyCleanup(Services.Select(item => item.Module));
+            SetCleanupReport("Восстановление выполнено", cleanup, dnsFlushed: true);
+            OperationMessage = cleanup.IsClean
+                ? "Изменения NetBypass удалены. Остальные записи hosts сохранены."
+                : "Восстановление выполнено, но проверка нашла хвосты NetBypass.";
             RefreshState();
         });
     }
@@ -363,15 +393,20 @@ public sealed class MainViewModel : ObservableObject
             PowerOperation = PowerOperation.Disconnecting;
             try
             {
+                ClearCleanupReport();
                 _hostsService.Disable();
                 DnsCacheService.Flush();
-                OperationMessage = string.Empty;
+                var cleanup = _hostsService.VerifyCleanup(Services.Select(item => item.Module));
+                SetCleanupReport("Отключение выполнено", cleanup, dnsFlushed: true);
+                OperationMessage = cleanup.IsClean
+                    ? "NetBypass отключён. Проверка очистки пройдена."
+                    : "NetBypass отключён, но проверка нашла хвосты. Используйте восстановление hosts.";
                 RefreshState();
                 await Task.Delay(450);
             }
             catch (Exception exception)
             {
-                OperationMessage = $"Ошибка: {exception.Message}";
+                OperationMessage = ToUserMessage("Не удалось отключить NetBypass", exception);
                 RefreshState();
             }
             finally
@@ -401,6 +436,7 @@ public sealed class MainViewModel : ObservableObject
 
         IsBusy = true;
         OperationMessage = string.Empty;
+        ClearCleanupReport();
         try
         {
             var results = await DiagnoseWithProgressAsync(selected);
@@ -431,7 +467,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            OperationMessage = $"Ошибка диагностики: {exception.Message}";
+            OperationMessage = ToUserMessage("Не удалось применить выбранные сервисы", exception);
             VerificationState = VerificationState.Unavailable;
         }
         finally
@@ -448,6 +484,7 @@ public sealed class MainViewModel : ObservableObject
 
         IsBusy = true;
         OperationMessage = string.Empty;
+        ClearCleanupReport();
         try
         {
             var results = await DiagnoseWithProgressAsync(selected);
@@ -461,7 +498,7 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            OperationMessage = $"Ошибка диагностики: {exception.Message}";
+            OperationMessage = ToUserMessage("Не удалось проверить выбранные сервисы", exception);
             VerificationState = VerificationState.Unavailable;
         }
         finally
@@ -645,6 +682,7 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(StateTitle));
         OnPropertyChanged(nameof(StateDescription));
         OnPropertyChanged(nameof(StateAccent));
+        OnPropertyChanged(nameof(CurrentUiState));
         OnPropertyChanged(nameof(PowerButtonLabel));
         OnPropertyChanged(nameof(IsPowerOn));
         OnPropertyChanged(nameof(IsCorrupted));
@@ -672,9 +710,54 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            OperationMessage = $"Ошибка: {exception.Message}";
+            OperationMessage = ToUserMessage("Операция не выполнена", exception);
             RefreshState();
         }
+    }
+
+    private void ClearCleanupReport()
+    {
+        CleanupTitle = string.Empty;
+        CleanupItems.Clear();
+        OnPropertyChanged(nameof(HasCleanupItems));
+    }
+
+    private void SetCleanupReport(
+        string title,
+        CleanupVerificationResult report,
+        bool dnsFlushed)
+    {
+        CleanupTitle = title;
+        CleanupItems.Clear();
+
+        foreach (var item in report.CompletedChecks)
+            CleanupItems.Add($"✓ {item}");
+
+        if (dnsFlushed)
+            CleanupItems.Add("✓ DNS-кеш Windows очищен.");
+
+        foreach (var issue in report.Issues)
+            CleanupItems.Add($"! {issue}");
+
+        OnPropertyChanged(nameof(HasCleanupItems));
+    }
+
+    private static string ToUserMessage(string prefix, Exception exception)
+    {
+        var hint = exception switch
+        {
+            UnauthorizedAccessException =>
+                "Запустите NetBypass от имени администратора и проверьте, не блокирует ли hosts антивирус.",
+            FileNotFoundException =>
+                "Системный файл hosts не найден.",
+            InvalidDataException =>
+                "В hosts найден повреждённый блок NetBypass. Используйте восстановление hosts.",
+            IOException =>
+                "Windows или другая программа сейчас удерживает файл. Закройте лишние процессы и повторите попытку.",
+            _ => exception.Message
+        };
+
+        return $"{prefix}: {hint}";
     }
 }
 
@@ -697,4 +780,17 @@ public enum PowerOperation
     None,
     Connecting,
     Disconnecting
+}
+
+public enum UiState
+{
+    Unknown,
+    Disabled,
+    Checking,
+    Disabling,
+    ActiveVerified,
+    ActiveDegraded,
+    ActiveUnverified,
+    ChangesPending,
+    Corrupted
 }
